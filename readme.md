@@ -1,7 +1,8 @@
 # Dynamic_Loc
 
-Dynamic_Loc is a framework for cleaning/retrieving distance measures from UWB hardwar finding the positions and giving real time indoor sub-meter localisation.
-The main idea is to recreate and predict the trajectory of an agent given only the anchors position and the distance between the current position and those anchors.
+Dynamic_Loc is a framework designed for real-time indoor localization with sub-meter accuracy using UWB (Ultra-Wideband) hardware. It focuses on cleaning and processing distance measurements to accurately determine an agent’s position.
+
+The core concept is to reconstruct and predict the trajectory of an agent using only the known positions of anchors and the measured distances from the agent to these anchors.
 
 ---
 
@@ -22,9 +23,7 @@ Dynamic_Loc/
 │   ├── trajectories/            - Generated trajectory files (.npy)
 │   └── test_*.csv               - Test data files
 ├── logs/                        - Log files
-├── acc_spped.py                 - Analyze speed and acceleration
 ├── analyse.py                   - Compare cleaned paths with reference paths
-├── cercles.py                   - Analyze circle intersections
 ├── mr_robot.py                  - Data collection script
 ├── visualisation.py             - Real-time trajectory visualization
 ├── Dynamic_loc.sh               - Main pipeline script (MQTT + collection)
