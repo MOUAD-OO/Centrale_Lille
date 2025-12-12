@@ -327,8 +327,8 @@ def main():
         print(f"{label} average delay: {value:.4f} (units of path)")
 
     analyzer.plot_speed_acceleration(frequency)
-    #analyzer.plot_static_paths()
-    analyzer.plot_moving_paths()
+    analyzer.plot_static_paths()
+    #analyzer.plot_moving_paths()
     #analyzer.plot_paths_on_real_map()
     
     

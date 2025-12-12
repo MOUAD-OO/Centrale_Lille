@@ -6,7 +6,6 @@ import configparser
 from scipy.optimize import least_squares
 from generating_bloc.convert_data import get_anchors_position_and_id
 from data_preparing.clean_positions import noise_cleaning
-import matplotlib.pyplot as plt
 import math
 
 
@@ -17,7 +16,8 @@ class PositionEstimator:
         self.config = configparser.ConfigParser()
         self.config.read(config_path)
         self.freq = self.config.getfloat("GENERATE", "freq")
-
+        self.intercetion_history=[]
+        self.raw_trajectory=[]
         # Parsed args (default None until parse_args is called)
         self.input = self.config.get("CANAL_MODEL","output")
         self.output = None
@@ -65,10 +65,194 @@ class PositionEstimator:
     def measur_at_step(dist_matrix: pd.DataFrame, step: int) -> pd.Series:
         dist_matrix = dist_matrix.drop(columns=["time stamp"])
         return dist_matrix.iloc[step]
+    
+    
+    
+    @staticmethod
+    def get_circle_params(distance_series: pd.Series, anchors_lookup: dict):
+        circle_params = []
+        for anchor_id in distance_series.index:
+            d_mes = distance_series[anchor_id]
+            if pd.isna(d_mes) or d_mes == 0:
+                continue
+            key = str(anchor_id)
+            try:
+                anchor_pos = np.asarray(anchors_lookup[key])[:2].astype(float)
+            except Exception:
+                try:
+                    anchor_pos = np.asarray(anchors_lookup[str(int(anchor_id))])[:2].astype(float)
+                except Exception:
+                    continue
+            circle_params.append([anchor_pos[0], anchor_pos[1], float(d_mes)])
+        return circle_params
+    
+    
 
-    # ----------------------
-    # Core estimation logic
-    # ----------------------
+    def intersection_polygon(self,circles, num_points_per_circle=100):
+        """
+        circles: list of [x, y, r]
+        num_points_per_circle: resolution along circumference
+        Returns: np.array of points [[x1,y1],[x2,y2],...] forming the intersection polygon
+        """
+        if len(circles) < 2:
+            return np.array([])  # Not enough circles for intersection
+
+        # Collect candidate points along all circles
+        candidate_points = []
+
+        for cx, cy, r in circles:
+            angles = np.linspace(0, 2*np.pi, num_points_per_circle, endpoint=False)
+            x_pts = cx + r * np.cos(angles)
+            y_pts = cy + r * np.sin(angles)
+            circle_pts = np.column_stack((x_pts, y_pts))
+            candidate_points.append(circle_pts)
+
+        candidate_points = np.vstack(candidate_points)
+
+        # Filter points inside all circles
+        def inside_all(pt):
+            x, y = pt
+            return all((x - cx)**2 + (y - cy)**2 <= r**2 + 5 for cx, cy, r in circles)
+
+        mask = np.array([inside_all(pt) for pt in candidate_points])
+        intersection_pts = candidate_points[mask]
+
+        if intersection_pts.shape[0] == 0:
+            return np.array([])
+
+        # Sort points counterclockwise around centroid
+        centroid = np.mean(intersection_pts, axis=0)
+        angles = np.arctan2(intersection_pts[:,1] - centroid[1], intersection_pts[:,0] - centroid[0])
+        sorted_indices = np.argsort(angles)
+        polygon = intersection_pts[sorted_indices]
+        self.polygon =polygon
+        return polygon
+
+
+    
+    def polygon_bounding_box(self,result):
+        """
+        polygon: np.array of points [[x1,y1],[x2,y2],...]
+        Returns: min_x, max_x, min_y, max_y
+        """
+        if self.polygon.size == 0:
+            print( "Attention : could not find a polygon !")
+            return result.x[0]-10,result.x[0]+10,result.x[1]-10,result.x[1]+10 , True # No intersection
+
+        min_x = np.min(self.polygon[:,0])
+        max_x = np.max(self.polygon[:,0])
+        min_y = np.min(self.polygon[:,1])
+        max_y = np.max(self.polygon[:,1])
+
+        return min_x, max_x, min_y, max_y, False
+
+    
+    
+    def Binary_search(self,thr_log_min,thr_log_max,target,mask,cell_area,z,real_volum,iter_max=40): 
+        thr_log = thr_log_max
+        iter=0
+            
+        while iter <= iter_max :
+            mask_inf = (z[mask] <= thr_log)  
+            V_i = np.abs(z[mask][mask_inf]).sum() * cell_area
+            fraction = V_i/real_volum
+                
+            if np.abs(fraction - target)<= 0.05:
+                break
+                    
+            elif fraction >= target :
+                thr_log_max = thr_log
+            else :
+                thr_log_min = thr_log
+            thr_log =(thr_log_max+thr_log_min)/2
+            iter+=1
+        #The metrics 
+        
+        intersection_area = mask.sum()*cell_area
+        area=mask_inf.sum()*cell_area           
+
+        return thr_log, V_i, fraction, intersection_area, area, mask_inf
+
+    
+    
+    def create_grid(self,circles,result, grid_size=100, grid_offset=10):
+        """
+        Prepare the plan_X, plan_Y meshgrid and mask for the circles.
+        """
+        self.polygon= self.intersection_polygon(circles, num_points_per_circle=200)
+        min_x, max_x, min_y, max_y, _ = self.polygon_bounding_box(result)
+
+        plan_X, plan_Y = np.meshgrid(
+            np.linspace(min_x - grid_offset, max_x + grid_offset, grid_size),
+            np.linspace(min_y - grid_offset, max_y + grid_offset, grid_size)
+        )
+
+        mask = np.ones_like(plan_X, dtype=bool)
+        for (x, y, r) in circles:
+            mask &= (np.hypot(plan_X - x, plan_Y - y) <= r)
+        if mask.sum() == 0:
+            mask = np.ones_like(plan_X, dtype=bool)
+            print("Couldn't find an intersection area ! try a bigger grid_size")
+        dx = np.mean(np.abs(np.diff(plan_X[0, :])))
+        dy = np.mean(np.abs(np.diff(plan_Y[:, 0])))
+        cell_area = dx * dy
+
+        return plan_X, plan_Y, mask, cell_area
+
+
+
+    def compute_z(self,plan_X, plan_Y, mask, distance, anchors):
+        """
+        Compute z values for each point in the grid, respecting the mask.
+        """
+        points = np.column_stack((plan_X.ravel(), plan_Y.ravel()))
+        z = np.full(plan_X.size, np.nan, dtype=float)
+
+        for i, p in enumerate(points):
+            r = self.residuals(p, distance, anchors)
+            if r is not None and len(r) > 0:
+                z[i] = np.log(np.linalg.norm(r))
+        try :
+            z = z.reshape(plan_X.shape)
+            z[~mask] = np.nanmax(z[mask]) # optional: zero outside mask
+        except : 
+            if mask.sum()==0 :
+                print("the cicrles do not intersect , Redo the fitting ! ")
+
+        
+        return z
+
+    
+    def compute_target_uncertainty(self,z, mask, cell_area, distance, anchors, target):
+        """
+        Compute real volume and Binary_search threshold/fraction at a target.
+        """
+        real_volum = np.nansum(np.abs(z[mask])) * cell_area
+        if real_volum == 0 or np.isnan(real_volum):
+            raise ValueError("real_volum is zero or NaN. Check grid or mask!")
+
+
+
+        thr_log_max, thr_log_min = (np.nanmax(z[mask]), np.nanmin(z[mask])) if z[mask].size else (0, -20)
+
+        thr_log, V_i, fraction, intersection_area, area, mask_inf = self.Binary_search(
+            thr_log_min, thr_log_max, target, mask, cell_area, z, real_volum)
+
+        return thr_log, V_i, fraction, intersection_area, area, mask_inf, real_volum
+
+
+    def incertitude(self,distance,anchors,result,target):
+        circles = self.get_circle_params(distance,anchors)
+    
+        plan_X, plan_Y, mask, cell_area=self.create_grid(circles,result, grid_size=100, grid_offset=20)
+        
+        z= self.compute_z(plan_X, plan_Y, mask, distance, anchors)
+
+        thr_log,V_i,fraction,intersection_area, area,mask_inf,real_volum =self.compute_target_uncertainty(z, mask, cell_area, distance, anchors, target)
+       
+        return intersection_area
+
+
     def initial_guess(self, distance: pd.DataFrame, step: int, anchors_path: str) -> np.ndarray:
         """
         Weighted average initial guess to reduce outliers & optimize convergence
@@ -90,6 +274,36 @@ class PositionEstimator:
             X0 = X0 / sum(weights)
         return X0[:2]
 
+
+    def incertitude_residuls(self,x,window=10):
+        n =len(self.intercetion_history)
+        window = min(window , n-1)
+        if n == 0:
+            return []
+        
+        outside_scale = 4
+        MEW = 2 
+        incertitude_res=[]
+        
+        for i in range(n-window,window+1):
+            fake_anchor = np.array(self.raw_trajectory[i])
+            d_mes = np.linalg.norm(fake_anchor- np.array(self.raw_trajectory[window]))
+            if d_mes == 0:  # missing data → skip
+                continue
+            if self.intercetion_history[i]!=0:
+                
+                d = self.dist(x, fake_anchor)
+                e =  np.abs( d - d_mes) # signed error
+                if d > d_mes + np.sqrt(self.intercetion_history[i]):
+                    cost = e / (d_mes*self.intercetion_history[i]) + (e * MEW) ** outside_scale
+                elif d > d_mes - np.sqrt(self.intercetion_history[i]):
+                    cost = e / (d_mes*self.intercetion_history[i]) + (e * MEW)
+                else:
+                    cost = e /(d_mes*self.intercetion_history[i])
+                incertitude_res.append(cost)
+        return incertitude_res
+                    
+        
     def residuals(self, x: np.ndarray, distance: pd.Series, anchors_position: dict) -> list:
         outside_scale = 4
         MEW = 2
@@ -103,7 +317,7 @@ class PositionEstimator:
 
             anchor_pos = np.array(anchors_position[distance.index[i]])[:2]  # only (x,y)
             d = self.dist(x, anchor_pos)  # estimated distance
-            e =  d - d_mes # signed error
+            e =   d - d_mes # signed error
             anchor_tarce.append([anchor_pos,d_mes])
             if d > d_mes:
                 cost = e / d_mes + (e * MEW) ** outside_scale
@@ -120,21 +334,11 @@ class PositionEstimator:
         elif len(residuals) == 2:
             self.STATUS = ["2_DATA", anchor_tarce] 
 
-        return residuals
-    def new_estimate(self,distance: pd.DataFrame,last_dot, anchors_path: str, step: int):
-        anchors_position = self.load_anchors(anchors_path)
-        dist_step = self.measur_at_step(distance, step)
-        result = least_squares(self.residuals,x0=last_dot,loss='huber', tr_solver='exact',args=(dist_step,anchors_position))
-        estimated_positions= result.x
-        if not result.success:
-            print(f"Optimization failed at step {step}: {result.message}")
-
-        return np.array(estimated_positions)
-        
-    def estimate_position(self,distance: pd.DataFrame, anchors_path: str, step: int)-> np.ndarray:
-        anchors_position = self.load_anchors(anchors_path)
+        return residuals + self.incertitude_residuls(x)
 
     
+    def estimate_position(self,distance: pd.DataFrame, anchors_path: str, step: int)-> np.ndarray:
+        anchors_position = self.load_anchors(anchors_path)
         dist_step = self.measur_at_step(distance, step)
         x0 = self.initial_guess(distance, step, anchors_path)
         result = least_squares(self.residuals,x0=x0,loss='huber', tr_solver='exact',args=(dist_step,anchors_position))
@@ -144,104 +348,9 @@ class PositionEstimator:
 
 
         estimated_positions= result.x
-
+        self.raw_trajectory.append(estimated_positions)
+        self.intercetion_history.append(self.incertitude(dist_step,anchors_position,result,0.8))
         return np.array(estimated_positions)
-
-
-
-
-
-
-
-class KalmanFilter:
-    
-    def __init__(self,config_path="generator_config.ini",):
-        self.config = configparser.ConfigParser()
-        self.config.read(config_path)
-        self.freq = self.config.getfloat("GENERATE", "freq")
-        self.dt = 1.0 / self.freq
-        
-
-    def evolution_matrix(self):
-        """This fuction gives the evolution matrix for the kalman filter 
-
-        Args:
-            dt ( float ): The time between two steps in seconds
-        """
-        return np.array([[1 ,0 ,self.dt,0 ],
-                        [0 ,1 ,0 ,self.dt],
-                        [0 ,0 ,1 ,0 ],
-                        [0 ,0 ,0 ,1 ]])
-        
-    
-    
-    
-
-    def Velocity_vector(self , point1, point2):
-        """This function computes the velocity vector between two points 
-
-        Args:
-            point1 (np.ndarray): the first point 
-            point2 (np.ndarray): the second point 
-            dt (float): the time between two points in seconds
-
-        Returns:
-            np.ndarray: the velocity vector 
-        """
-        return (point2 - point1) / self.dt
-
-
-
-
-
-
-
-    def kalman_filter_trajectory(self,positions, time_window = 5, coeff=0.4):
-        """
-        Apply a simplified Kalman-like filter on the entire trajectory.
-
-        Args:
-            positions (np.ndarray): array of positions, shape (n, d)
-            time_window (int): number of steps to look back for velocity estimation
-            coeff (float): blending coefficient (0..1)
-            freq (float): measurement frequency in Hz
-
-        Returns:
-            np.ndarray: filtered trajectory, same shape as positions
-        """
-        n, d = positions.shape
-        d=d-1
-        freq= self.freq
-        dt = 1.0 / freq
-
-        # Copy positions to initialize filtered trajectory
-        filtered = np.copy(positions)
-        old_velocity = np.zeros(d)
-        for i in range(2, n):
-            # Determine the start of the window
-            start_idx = max(0, i - time_window)
-            pos_start = filtered[start_idx,:2]
-            pos_n_1 = filtered[i - 1,:2]
-
-            # Compute velocity from start of window to previous point
-            old_dt = (i - 1 - start_idx) * dt
-            if old_dt == 0:
-                old_velocity = np.zeros(d)
-            else:
-                v = (pos_n_1 - pos_start) / old_dt
-                if np.linalg.norm(v) >300:
-                    old_velocity = v #cap velocity 
-
-            # Extrapolate to current step
-            new_dt = dt
-            estimated_pos = pos_n_1 + old_velocity * new_dt
-
-            # Blend with the current measurement
-            filtered[i,:2] = coeff * estimated_pos + (1 - coeff) * positions[i,:2]
-
-
-        return np.array([filtered])
-
 
 
 def intersection_cercles(x0, y0, r0, x1, y1, r1):
@@ -324,9 +433,9 @@ def main():
     step = 0
     new_path = []
     while step < len(distance):
-        placed = False
 
         try:
+    
             estimated_position = estimator.estimate_position(distance, anchors_path, step)
    
             new_path.append([estimated_position[0],estimated_position[1],step*(1/estimator.freq)])

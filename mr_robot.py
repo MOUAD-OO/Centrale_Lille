@@ -15,7 +15,7 @@ import asyncio
 # Argument parsing
 # ---------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument("--movement", type=str, help="The movement you want to test", default="test")
+parser.add_argument("--movement", type=str, help="The movement you want to test", default="test_signed")
 parser.add_argument("--anchor_npy",type=str, help =" The anchors' positions in a np.ndarray ",default="generating_bloc/anchor_positions.npy")
 args = parser.parse_args()
 movement = args.movement
@@ -102,7 +102,7 @@ def process_metadata(list_meta_data, tags, UID, data, positions):
 
 async def run_predictor_async(tag, csv_in, npy_out):
     """Run predictor asynchronously and return result."""
-    cmd = ["python3", "-m", "data_preparing.predict_path", "--input", csv_in, "--output", npy_out]
+    cmd = ["python3", "-m", "data_preparing.predict_path_inc", "--input", csv_in, "--output", npy_out]
     try:
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await proc.communicate()
@@ -174,7 +174,7 @@ async def main_loop():
                     if not rows:
                         continue
                     
-                    last_hist_len = max(0, len(rows) - 40)
+                    last_hist_len = max(0, len(rows) - 50)
                     rows = rows[last_hist_len:]
                     df = pd.DataFrame(rows)
                     print(len(df))
