@@ -41,7 +41,7 @@ def refresh_files():
         info = file_info.get(f)
 
         if info is None:
-            traj = load_trajectory(p)
+            traj = load_trajectory(p) 
             if traj is None:
                 continue
             filenames.append(f)
@@ -90,7 +90,7 @@ def update(frame):
     return lines
 
 # Run the animation indefinitely; update() will pick up new files as they appear.
-ani = FuncAnimation(fig, update, frames=itertools.count(), interval=500, blit=False)
+ani = FuncAnimation(fig, update, frames=itertools.count(), interval=5, blit=False)
 
 plt.axis('equal')
 plt.legend()

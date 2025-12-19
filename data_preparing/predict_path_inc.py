@@ -7,6 +7,7 @@ from scipy.optimize import least_squares
 from generating_bloc.convert_data import get_anchors_position_and_id
 from data_preparing.clean_positions import noise_cleaning
 import math
+import time
 
 
 
@@ -168,10 +169,10 @@ class PositionEstimator:
             iter+=1
         #The metrics 
         
-        intersection_area = mask.sum()*cell_area
+        
         area=mask_inf.sum()*cell_area           
 
-        return thr_log, V_i, fraction, intersection_area, area, mask_inf
+        return thr_log, V_i, fraction, area, mask_inf
 
     
     
@@ -206,12 +207,16 @@ class PositionEstimator:
         Compute z values for each point in the grid, respecting the mask.
         """
         points = np.column_stack((plan_X.ravel(), plan_Y.ravel()))
-        z = np.full(plan_X.size, np.nan, dtype=float)
 
+        z = np.full(plan_X.size, np.nan, dtype=float)
+        start = time.time()
         for i, p in enumerate(points):
+            
             r = self.residuals(p, distance, anchors)
             if r is not None and len(r) > 0:
                 z[i] = np.log(np.linalg.norm(r))
+        end = time.time()
+        print("Elapsed:", end - start, "seconds")
         try :
             z = z.reshape(plan_X.shape)
             z[~mask] = np.nanmax(z[mask]) # optional: zero outside mask
@@ -235,22 +240,24 @@ class PositionEstimator:
 
         thr_log_max, thr_log_min = (np.nanmax(z[mask]), np.nanmin(z[mask])) if z[mask].size else (0, -20)
 
-        thr_log, V_i, fraction, intersection_area, area, mask_inf = self.Binary_search(
+        thr_log, V_i, fraction, area, mask_inf = self.Binary_search(
             thr_log_min, thr_log_max, target, mask, cell_area, z, real_volum)
 
-        return thr_log, V_i, fraction, intersection_area, area, mask_inf, real_volum
+        return thr_log, V_i, fraction, area, mask_inf, real_volum
 
 
     def incertitude(self,distance,anchors,result,target):
         circles = self.get_circle_params(distance,anchors)
-    
+
         plan_X, plan_Y, mask, cell_area=self.create_grid(circles,result, grid_size=100, grid_offset=20)
         
+ 
         z= self.compute_z(plan_X, plan_Y, mask, distance, anchors)
-
-        thr_log,V_i,fraction,intersection_area, area,mask_inf,real_volum =self.compute_target_uncertainty(z, mask, cell_area, distance, anchors, target)
-       
-        return intersection_area
+        
+        thr_log,V_i,fraction, area,mask_inf,real_volum =self.compute_target_uncertainty(z, mask, cell_area, distance, anchors, target)
+        
+        
+        return area
 
 
     def initial_guess(self, distance: pd.DataFrame, step: int, anchors_path: str) -> np.ndarray:
@@ -275,9 +282,9 @@ class PositionEstimator:
         return X0[:2]
 
 
-    def incertitude_residuls(self,x,window=10):
-        n =len(self.intercetion_history)
-        window = min(window , n-1)
+    def incertitude_residuls(self,x,window=5):
+        n =len(self.intercetion_history)-1
+        window = min(window , n)
         if n == 0:
             return []
         
@@ -285,22 +292,25 @@ class PositionEstimator:
         MEW = 2 
         incertitude_res=[]
         
-        for i in range(n-window,window+1):
-            fake_anchor = np.array(self.raw_trajectory[i])
-            d_mes = np.linalg.norm(fake_anchor- np.array(self.raw_trajectory[window]))
+        for i in range(n-window,n):
+            prev = np.array(self.raw_trajectory[i])
+            fictif_anchor = (prev- np.array(self.raw_trajectory[n])/n-i)*(n-i+1)
+            d_mes=np.sqrt(self.intercetion_history[i])
             if d_mes == 0:  # missing data → skip
                 continue
             if self.intercetion_history[i]!=0:
-                
-                d = self.dist(x, fake_anchor)
+                normalisation = np.sqrt( self.intercetion_history[i])
+                d = self.dist(x,fictif_anchor)
                 e =  np.abs( d - d_mes) # signed error
-                if d > d_mes + np.sqrt(self.intercetion_history[i]):
-                    cost = e / (d_mes*self.intercetion_history[i]) + (e * MEW) ** outside_scale
-                elif d > d_mes - np.sqrt(self.intercetion_history[i]):
-                    cost = e / (d_mes*self.intercetion_history[i]) + (e * MEW)
+                if d > d_mes+normalisation:
+                    cost = e /(d_mes*normalisation) +  (((e/normalisation) * MEW)**2)
+                elif d > normalisation:
+                    cost = e /(d_mes*normalisation) +  (((e/normalisation) * MEW)**1.2)
                 else:
-                    cost = e /(d_mes*self.intercetion_history[i])
+                    cost = e /(d_mes*normalisation)
                 incertitude_res.append(cost)
+        
+        
         return incertitude_res
                     
         
@@ -337,19 +347,22 @@ class PositionEstimator:
         return residuals + self.incertitude_residuls(x)
 
     
-    def estimate_position(self,distance: pd.DataFrame, anchors_path: str, step: int)-> np.ndarray:
+    def estimate_position(self,distance: pd.DataFrame, anchors_path: str, step: int,First_iter=True)-> np.ndarray:
         anchors_position = self.load_anchors(anchors_path)
         dist_step = self.measur_at_step(distance, step)
         x0 = self.initial_guess(distance, step, anchors_path)
-        result = least_squares(self.residuals,x0=x0,loss='huber', tr_solver='exact',args=(dist_step,anchors_position))
-        if not result.success:
+        bounds = (-np.inf * np.ones_like(x0), np.inf * np.ones_like(x0))
+
+        result = least_squares(self.residuals,x0=x0,loss='huber',  bounds=bounds,tr_solver='exact',args=(dist_step,anchors_position))
+        if not result.success and First_iter :
             #print(f"Optimization failed at step {step}: {result.message}")
             self.STATUS=['OPTIMIZATION_FAIL']
+            print('OPTIMIZATION_FAIL',step)
 
 
         estimated_positions= result.x
         self.raw_trajectory.append(estimated_positions)
-        self.intercetion_history.append(self.incertitude(dist_step,anchors_position,result,0.8))
+        self.intercetion_history.append(self.incertitude(dist_step,anchors_position,result,0.5))
         return np.array(estimated_positions)
 
 
@@ -455,7 +468,7 @@ def main():
                     # fallback to Kalman prediction
                     new_path[step][0] = kalman_pos[0]
                     new_path[step][1] = kalman_pos[1]
-                    print(new_path)
+                    
                     print("Warning: circles do not intersect — using Kalman prediction")
                 else:
                     p1, p2 = dots
@@ -479,7 +492,7 @@ def main():
                 print("Warning : No anchor is detected. Taking position as the Kalman prediction ")
             if estimator.STATUS[0]== "OPTIMIZATION_FAIL" :
                 
-                new_position = estimator.new_estimate(distance,new_path[step][:2], anchors_path, step)
+                new_position = estimator.estimate_position(distance, anchors_path, step,First_iter=False)
                 new_path[step]=[new_position[0],new_position[1],step*(1/estimator.freq)]
                 
     
@@ -497,7 +510,12 @@ def main():
     np.save(estimator.output, filtered_path)       
 
 
+"""
         
 if __name__ == "__main__":
     main()
+    
+    
     print("path is saved")
+    
+"""    

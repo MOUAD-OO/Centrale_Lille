@@ -258,7 +258,7 @@ class PathAnalyzer:
       
       
     
-    def plot_moving_paths(self, interval=1000):
+    def plot_moving_paths(self, interval=100):
         """Animate paths moving point by point."""
         anchor_positions = np.load("/home/nathan/Dynamic_Loc/generating_bloc/anchor_positions.npy")
 
@@ -328,7 +328,7 @@ def main():
 
     analyzer.plot_speed_acceleration(frequency)
     analyzer.plot_static_paths()
-    #analyzer.plot_moving_paths()
+    analyzer.plot_moving_paths()
     #analyzer.plot_paths_on_real_map()
     
     

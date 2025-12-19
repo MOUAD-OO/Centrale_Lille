@@ -44,7 +44,7 @@ echo "Collecting '$name' test vectors"
 MOSQUITTO_PID=$!
 
 # Run the Python script in the background
-python3 mr_robot.py --movement "$name" &  
+python3 mr_robot_dev.py --movement "$name" &  
 PYTHON_PID=$!
 
 

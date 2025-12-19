@@ -4,18 +4,14 @@ import json
 from datetime import datetime
 import argparse
 from collections import deque
-from time import sleep 
-import subprocess
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-import time
 import asyncio
+
 
 # ---------------------------
 # Argument parsing
 # ---------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument("--movement", type=str, help="The movement you want to test", default="test_signed")
+parser.add_argument("--movement", type=str, help="The movement you want to test", default="test")
 parser.add_argument("--anchor_npy",type=str, help =" The anchors' positions in a np.ndarray ",default="generating_bloc/anchor_positions.npy")
 args = parser.parse_args()
 movement = args.movement
@@ -89,7 +85,7 @@ def process_metadata(list_meta_data, tags, UID, data, positions):
             distance = line["poi"]["anchors"].get(anchor_uid, {}).get("dst", 0)
             
             if distance != 0:
-                row[anchor_uid] = np.sqrt(distance ** 2 - (1 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
+                row[anchor_uid] = np.sqrt(distance ** 2 - (1.3 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
             else:
                 row[anchor_uid] = distance
         
@@ -99,30 +95,44 @@ def process_metadata(list_meta_data, tags, UID, data, positions):
         # Append row
         data[tag].append(row)
 
+async def run_predictor_async(tag, csv_in, npy_out_temp):
+    cmd = [
+        "python3",
+        "-m",
+        "data_preparing.predict_path",
+        "--input", csv_in,
+        "--output", npy_out_temp
+    ]
 
-async def run_predictor_async(tag, csv_in, npy_out):
-    """Run predictor asynchronously and return result."""
-    cmd = ["python3", "-m", "data_preparing.predict_path_inc", "--input", csv_in, "--output", npy_out]
     try:
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
         stdout, stderr = await proc.communicate()
-        if proc.returncode == 0:
-            print(f"Predictor finished for {tag}")
-            return True
-        else:
+
+        if proc.returncode != 0:
             print(f"Predictor failed for {tag}: {stderr.decode()}")
             return False
+
+        print(f"Predictor finished for {tag}")
+
+       
+
+        return True
+
     except Exception as e:
         print(f"Predictor error for {tag}: {e}")
         return False
-
 
 # ---------------------------
 # Initialize data structures
 # ---------------------------
 data = {tag: [] for tag in tags}
 positions = {tag: [] for tag in tags}
-pending_tasks = []  # Track async predictor tasks
+pending_tasks = []
 
 UID = {}
 with open('generating_bloc/woltDynDev.json', 'r') as f:
@@ -132,11 +142,7 @@ with open('generating_bloc/woltDynDev.json', 'r') as f:
         
         
         
-# ---------------------------
-# Load logs
-# ---------------------------
-list_meta_data = []
-last_meta_data = None
+
 
 
 
@@ -145,15 +151,14 @@ last_meta_data = None
 # Load logs (real-time tail)
 # ---------------------------
 file_position = 0
-processed_count = 0
+
+ 
  
 async def main_loop():
     global file_position, pending_tasks
-    
     while True:
         try:
             with open('logs/test.log', 'r') as file:
-                loop_start = time.monotonic()
                 file.seek(file_position)  # Resume from last position
                 new_lines = []
                 for line in file:
@@ -164,12 +169,11 @@ async def main_loop():
                 
                 if len(new_lines)==0:
                 # Wait if no new data
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(2)
                     continue
                 
-                
                 process_metadata(new_lines, tags, UID, data, positions)
-                # Save CSVs and launch predictor asynchronously
+                # Save CSVs and run predictor only when new data arrives
                 for tag, rows in data.items():
                     if not rows:
                         continue
@@ -177,37 +181,42 @@ async def main_loop():
                     last_hist_len = max(0, len(rows) - 50)
                     rows = rows[last_hist_len:]
                     df = pd.DataFrame(rows)
-                    print(len(df))
+                    
                     transform(df, freq=1)
                     df.to_csv(f"test_site/{movement}_{tag}.csv", index=False)
                     print(f"Saved CSV for tag {tag}")
-                    
-                    # Launch predictor asynchronously
+                    #traj=np.load(f"test_site/trajectories/{movement}_{tag}.npy")
+                    # Run predictor
                     csv_in = f"test_site/{movement}_{tag}.csv"
                     npy_out = f"test_site/trajectories/{movement}_{tag}.npy"
                     task = asyncio.create_task(run_predictor_async(tag, csv_in, npy_out))
                     pending_tasks.append((tag, task, last_hist_len))
-                
+                    
+                    
                 # Clean up completed tasks and update data
                 still_pending = []
                 for tag, task, last_hist_len in pending_tasks:
                     if task.done():
                         try:
                             task.result()  # Check for exceptions
-                            data[tag] = data[tag][last_hist_len:]
+                            data[tag] = data[tag][-(50):]
                         except Exception as e:
                             print(f"Task error for {tag}: {e}")
                     else:
                         still_pending.append((tag, task, last_hist_len))
                 pending_tasks = still_pending
                 
-                elapsed = time.monotonic() - loop_start
-                print(f"Loop took {elapsed:.3f} seconds")
+                if len(pending_tasks)<10:
+                    await asyncio.sleep(0.5)
+                                    
                 
+                
+
         except Exception as e:
             print(f"Error: {e}")
             await asyncio.sleep(1)
-
+            
+            
 # Run the async main loop
 if __name__ == "__main__":
     asyncio.run(main_loop())

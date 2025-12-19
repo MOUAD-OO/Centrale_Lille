@@ -69,7 +69,7 @@ def save_positions_cartesian(positions, freq, anchors_path='generating_bloc/wolt
 # Load logs
 # ---------------------------
 list_meta_data = []
-with open('logs/test3.log', 'r') as file:
+with open('logs/test.log', 'r') as file:
     for line in file:
         if line.startswith('/applink/'):
             list_meta_data.append(get_json(line))

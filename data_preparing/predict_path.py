@@ -8,6 +8,7 @@ from generating_bloc.convert_data import get_anchors_position_and_id
 from data_preparing.clean_positions import noise_cleaning
 import matplotlib.pyplot as plt
 import math
+import time
 
 
 
@@ -385,10 +386,15 @@ def main():
     filtered_path= kalman_filter(new_path[0])
 
     filtered_path=np.array([filtered_path])
-    np.save(estimator.output, filtered_path)       
-
-
-        
+    #np.save(estimator.output, filtered_path)      
+    return  filtered_path
+   
+  
+"""  
+ 
 if __name__ == "__main__":
+
     main()
+    
     print("path is saved")
+"""
