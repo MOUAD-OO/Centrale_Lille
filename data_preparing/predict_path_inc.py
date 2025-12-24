@@ -249,7 +249,7 @@ class PositionEstimator:
     def incertitude(self,distance,anchors,result,target):
         circles = self.get_circle_params(distance,anchors)
 
-        plan_X, plan_Y, mask, cell_area=self.create_grid(circles,result, grid_size=100, grid_offset=20)
+        plan_X, plan_Y, mask, cell_area=self.create_grid(circles,result, grid_size=100, grid_offset=10)
         
  
         z= self.compute_z(plan_X, plan_Y, mask, distance, anchors)
@@ -362,7 +362,7 @@ class PositionEstimator:
 
         estimated_positions= result.x
         self.raw_trajectory.append(estimated_positions)
-        self.intercetion_history.append(self.incertitude(dist_step,anchors_position,result,0.5))
+        self.intercetion_history.append(self.incertitude(dist_step,anchors_position,result,0.7))
         return np.array(estimated_positions)
 
 

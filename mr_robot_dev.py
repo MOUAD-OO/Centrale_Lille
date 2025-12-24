@@ -94,9 +94,12 @@ def process_metadata(list_meta_data, tags, UID, data, positions):
             distance = line["poi"]["anchors"].get(anchor_uid, {}).get("dst", 0)
             
             if distance != 0:
-                row[anchor_uid] = np.sqrt(distance ** 2 - (1 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
+                try:
+                    row[anchor_uid] = np.sqrt(distance ** 2 - (0 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
+                except ValueError:
+                    row[anchor_uid] = distance*100
             else:
-                row[anchor_uid] = distance
+                row[anchor_uid] = distance*100
         
         # Append position
         positions[tag].append([float(line["latitude"]), float(line["longitude"])])
@@ -128,7 +131,7 @@ def intersection_cercles(x0, y0, r0, x1, y1, r1):
     
     return [p1, p2]
 
-def kalman_filter(positions, time_window = 3, coeff=0.2, freq=1):
+def kalman_filter(positions, time_window = 3, coeff=0.25, freq=1):
     """
     Apply a simplified Kalman-like filter on the entire trajectory.
 
@@ -178,7 +181,7 @@ def prediction(df,trajectory):
     
     distance = df
     anchors_path = "generating_bloc/woltDynDev.json" #Hardcoded for now
-    step = 0
+    step = len(trajectory)-1
     new_path = list(trajectory[0] )
     while step < len(distance):
 
@@ -195,14 +198,14 @@ def prediction(df,trajectory):
                 
                 dots = intersection_cercles(anchors[0][0][0],anchors[0][0][1],anchors[0][1],
                                             anchors[1][0][0],anchors[1][0][1],anchors[1][1])
-                print(step)
+
                 kalman_pos=kalman_filter(np.array(new_path) ,coeff=1)[step,:2]
                     # Safe handling when circles do not intersect (intersection_cercles returns None)
                 if dots is None:
                     # fallback to Kalman prediction
                     new_path[step][0] = kalman_pos[0]
                     new_path[step][1] = kalman_pos[1]
-                    print(new_path)
+           
                     print("Warning: circles do not intersect — using Kalman prediction")
                 else:
                     p1, p2 = dots
@@ -246,15 +249,18 @@ def prediction(df,trajectory):
     return  filtered_path,raw_path
 
 def run_predictor(tag,rows,trajectories,movement=movement):
+    global last_hist_len
     print("Running run_predictor")
-    last_hist_len = len(trajectories[tag][0])
-    rows = rows[last_hist_len:]
-   
+    
+    #rows = rows[last_hist_len:]
+    last_hist_len = max(0, len(trajectories[tag][0])-1)
     df = pd.DataFrame(rows)
+    print("Carried DATA size :",tag,len(df))
+    transform(df,freq=1)
     filtered_trajectory,trajectories[tag]= prediction(df,trajectories[tag])
     np.save(f"test_site/trajectories/{movement}_{tag}.npy", filtered_trajectory)
 
-    
+    df.to_csv(f"test_site/{movement}_{tag}_distance.csv",index=False)
     
 UID = {}
 with open('generating_bloc/woltDynDev.json', 'r') as f:
@@ -266,7 +272,7 @@ with open('generating_bloc/woltDynDev.json', 'r') as f:
 # Load logs (real-time tail)
 # ---------------------------
 file_position = 0
-
+last_hist_len=0
 
 while True:
     try:    
@@ -287,7 +293,7 @@ while True:
                 if rows:
                     run_predictor(tag,rows ,trajectories)
                         
-                    
+                    data = {tag: [] for tag in tags}
 
                 
     except Exception as e:

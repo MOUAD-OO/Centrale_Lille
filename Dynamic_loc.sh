@@ -14,6 +14,19 @@ cleanup() {
     kill -KILL $MOSQUITTO_PID $PYTHON_PID 2>/dev/null
     wait 2>/dev/null
     echo "Processes stopped."
+
+    # Ask if user wants to delete a file
+    read -p "Do you want to delete a file? [y/N]: " delete_choice
+    if [[ "$delete_choice" =~ ^[Yy]$ ]]; then
+        read -p "Enter the full path of the file to delete: " file_path
+        if [ -f "logs/test.log" ]; then
+            rm "logs/test.log"
+            echo "File 'logs/test.log' deleted."
+        else
+            echo "File 'logs/test.log' does not exist."
+        fi
+    fi
+
     exit 0
 }
 
@@ -46,7 +59,6 @@ MOSQUITTO_PID=$!
 # Run the Python script in the background
 python3 mr_robot_dev.py --movement "$name" &  
 PYTHON_PID=$!
-
 
 echo "Both processes started in background"
 echo "Press Ctrl+C to stop both processes"
