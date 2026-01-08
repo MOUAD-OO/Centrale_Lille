@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+Dynamic_loc_env/
+debeug.ipynb
