@@ -104,7 +104,7 @@ for line in list_meta_data:
         distance = line["poi"]["anchors"].get(anchor_uid, {}).get("dst", 0)
          
         if distance!= 0:
-            row[anchor_uid] = np.sqrt(distance ** 2 -  (1 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
+            row[anchor_uid] = np.sqrt(distance ** 2 -  (0.1 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
         else:
             row[anchor_uid] = distance
     # Append position

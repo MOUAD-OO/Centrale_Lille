@@ -8,55 +8,77 @@ from generating_bloc.convert_data import get_anchors_position_and_id
 from data_preparing.clean_positions import noise_cleaning
 import math
 import time
+from scipy.spatial import ConvexHull
+
+
 
 
 
 class PositionEstimator:
+    
+    
     def __init__(self, config_path: str = "generator_config.ini"):
+        
         # Load configuration
         self.config = configparser.ConfigParser()
         self.config.read(config_path)
         self.freq = self.config.getfloat("GENERATE", "freq")
         self.intercetion_history=[]
         self.raw_trajectory=[]
+        self.polygons_reduit=[]
+        
         # Parsed args (default None until parse_args is called)
         self.input = self.config.get("CANAL_MODEL","output")
         self.output = None
 
+
     def parse_arguments(self):
+        
         """Parse CLI arguments and update object attributes."""
         parser = argparse.ArgumentParser(
-            description="Estimate path from distance matrix with handling missing data"
-        )
-        parser.add_argument("--input", help="Path to the noisy position (csv file)", default= self.input)
-        parser.add_argument("--output", help="Path for the output file (.npy)")
+            description="Estimate path from distance matrix with handling missing data")
+        
+        parser.add_argument("--input", 
+                            help="Path to the noisy position (csv file)"
+                            , default= self.input)
+        
+        parser.add_argument("--output",
+                            help="Path for the output file (.npy)")
+        
         parser.add_argument(
-            "--freq", type=float, help="Measurement frequency in Hz", default=self.freq
-        )
+            "--freq", type=float
+            , help="Measurement frequency in Hz", default=self.freq)
+        
         args = parser.parse_args()
-
         self.input = args.input
         self.output = args.output
         self.freq = args.freq
+        
+    
     # ----------------------
     # Utility static methods
     # ----------------------
     @staticmethod
     def dist(p1: np.ndarray, p2: np.ndarray) -> float:
+        
         return np.linalg.norm(p1 - p2)
 
     @staticmethod
     def error(x, dist):
+        
         return x - dist
 
     @staticmethod
     def load_matrix(matrix_path: str) -> pd.DataFrame:
+        
         return pd.read_csv(matrix_path, sep=",")
 
     @staticmethod
     def load_anchors(anchors_path: str) -> dict:
+        
         with open(anchors_path, "r") as f:
             data = json.load(f)
+            
         ref_data = data["transform"]
         anchor_data = data["devices"]
         anchors_positions = get_anchors_position_and_id(ref_data, anchor_data)
@@ -64,6 +86,7 @@ class PositionEstimator:
 
     @staticmethod
     def measur_at_step(dist_matrix: pd.DataFrame, step: int) -> pd.Series:
+        
         dist_matrix = dist_matrix.drop(columns=["time stamp"])
         return dist_matrix.iloc[step]
     
@@ -88,7 +111,6 @@ class PositionEstimator:
         return circle_params
     
     
-
     def intersection_polygon(self,circles, num_points_per_circle=100):
         """
         circles: list of [x, y, r]
@@ -119,6 +141,8 @@ class PositionEstimator:
         intersection_pts = candidate_points[mask]
 
         if intersection_pts.shape[0] == 0:
+            # No intersection points — return empty polygon early to avoid mean on empty slice
+            self.polygon = np.array([])
             return np.array([])
 
         # Sort points counterclockwise around centroid
@@ -126,11 +150,11 @@ class PositionEstimator:
         angles = np.arctan2(intersection_pts[:,1] - centroid[1], intersection_pts[:,0] - centroid[0])
         sorted_indices = np.argsort(angles)
         polygon = intersection_pts[sorted_indices]
-        self.polygon =polygon
+        self.polygon = polygon
+        
         return polygon
 
 
-    
     def polygon_bounding_box(self,result):
         """
         polygon: np.array of points [[x1,y1],[x2,y2],...]
@@ -147,8 +171,7 @@ class PositionEstimator:
 
         return min_x, max_x, min_y, max_y, False
 
-    
-    
+     
     def Binary_search(self,thr_log_min,thr_log_max,target,mask,cell_area,z,real_volum,iter_max=40): 
         thr_log = thr_log_max
         iter=0
@@ -175,7 +198,6 @@ class PositionEstimator:
         return thr_log, V_i, fraction, area, mask_inf
 
     
-    
     def create_grid(self,circles,result, grid_size=100, grid_offset=10):
         """
         Prepare the plan_X, plan_Y meshgrid and mask for the circles.
@@ -189,17 +211,19 @@ class PositionEstimator:
         )
 
         mask = np.ones_like(plan_X, dtype=bool)
+        
         for (x, y, r) in circles:
             mask &= (np.hypot(plan_X - x, plan_Y - y) <= r)
+            
         if mask.sum() == 0:
             mask = np.ones_like(plan_X, dtype=bool)
             print("Couldn't find an intersection area ! try a bigger grid_size")
+            
         dx = np.mean(np.abs(np.diff(plan_X[0, :])))
         dy = np.mean(np.abs(np.diff(plan_Y[:, 0])))
         cell_area = dx * dy
 
         return plan_X, plan_Y, mask, cell_area
-
 
 
     def compute_z(self,plan_X, plan_Y, mask, distance, anchors):
@@ -210,21 +234,23 @@ class PositionEstimator:
 
         z = np.full(plan_X.size, np.nan, dtype=float)
         start = time.time()
+        
         for i, p in enumerate(points):
-            
             r = self.residuals(p, distance, anchors)
             if r is not None and len(r) > 0:
                 z[i] = np.log(np.linalg.norm(r))
+                
         end = time.time()
         print("Elapsed:", end - start, "seconds")
+        
         try :
             z = z.reshape(plan_X.shape)
             z[~mask] = np.nanmax(z[mask]) # optional: zero outside mask
+            
         except : 
             if mask.sum()==0 :
                 print("the cicrles do not intersect , Redo the fitting ! ")
 
-        
         return z
 
     
@@ -255,10 +281,18 @@ class PositionEstimator:
         z= self.compute_z(plan_X, plan_Y, mask, distance, anchors)
         
         thr_log,V_i,fraction, area,mask_inf,real_volum =self.compute_target_uncertainty(z, mask, cell_area, distance, anchors, target)
-        
-        
-        return area
+        contour_mask = z < thr_log
+        points_polygon = np.column_stack((plan_X[contour_mask], plan_Y[contour_mask]))
 
+        if points_polygon.shape[0] > 2:
+            hull = ConvexHull(points_polygon)
+            points_polygon_sorted = points_polygon[hull.vertices]
+        else:
+            points_polygon_sorted = points_polygon
+
+        self.polygons_reduit.append(points_polygon_sorted)
+            
+        
 
     def initial_guess(self, distance: pd.DataFrame, step: int, anchors_path: str) -> np.ndarray:
         """
@@ -280,6 +314,7 @@ class PositionEstimator:
         else:
             X0 = X0 / sum(weights)
         return X0[:2]
+
 
 
     def incertitude_residuls(self,x,window=5):
@@ -305,7 +340,7 @@ class PositionEstimator:
                 if d > d_mes+normalisation:
                     cost = e /(d_mes*normalisation) +  (((e/normalisation) * MEW)**2)
                 elif d > normalisation:
-                    cost = e /(d_mes*normalisation) +  (((e/normalisation) * MEW)**1.2)
+                    cost = e /(d_mes*normalisation) +  (((e/normalisation) * MEW)**2)
                 else:
                     cost = e /(d_mes*normalisation)
                 incertitude_res.append(cost)
@@ -344,7 +379,7 @@ class PositionEstimator:
         elif len(residuals) == 2:
             self.STATUS = ["2_DATA", anchor_tarce] 
 
-        return residuals + self.incertitude_residuls(x)
+        return residuals #+ self.incertitude_residuls(x)
 
     
     def estimate_position(self,distance: pd.DataFrame, anchors_path: str, step: int,First_iter=True)-> np.ndarray:
@@ -362,7 +397,8 @@ class PositionEstimator:
 
         estimated_positions= result.x
         self.raw_trajectory.append(estimated_positions)
-        self.intercetion_history.append(self.incertitude(dist_step,anchors_position,result,0.7))
+        self.incertitude(dist_step,anchors_position,result,0.8)
+        
         return np.array(estimated_positions)
 
 

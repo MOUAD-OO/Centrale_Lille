@@ -2,64 +2,64 @@
   "devices": [
     {
       "uid": "001BC50C70027DC4",
-      "latitude": 48.817215,
-      "longitude": 2.3265162,
-      "altitude": 2.70,
+      "latitude": 48.8173017,
+      "longitude": 2.3264492,
+      "altitude": 1.20,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027DD9",
-      "latitude": 48.8172874,
-      "longitude": 2.3263064,
-      "altitude": 1.80,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027DDA",
-      "latitude": 48.8172847,
-      "longitude": 2.3263764,
-      "altitude": 1.00,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027DF5",
-      "latitude": 48.817222,
-      "longitude": 2.3264589,
-      "altitude": 0.10,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027E14",
-      "latitude": 48.8172975,
-      "longitude": 2.3264908,
+      "latitude": 48.8172788,
+      "longitude": 2.3265843,
       "altitude": 1.50,
       "pin_mode": "Yes"
     },
     {
+      "uid": "001BC50C70027DDA",
+      "latitude": 48.8172878,
+      "longitude": 2.3263345,
+      "altitude": 0.52,
+      "pin_mode": "Yes"
+    },
+    {
+      "uid": "001BC50C70027DF5",
+      "latitude": 48.8172216,
+      "longitude": 2.3264670,
+      "altitude": 0.81,
+      "pin_mode": "Yes"
+    },
+    {
+      "uid": "001BC50C70027E14",
+      "latitude": 48.8172671,
+      "longitude": 2.3265216,
+      "altitude": 0.64,
+      "pin_mode": "Yes"
+    },
+    {
       "uid": "001BC50C70027E75",
-      "latitude": 48.8172366,
-      "longitude": 2.3263389,
-      "altitude": 1.00,
+      "latitude": 48.8172364,
+      "longitude": 2.3263355,
+      "altitude": 0.81,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027E81",
-      "latitude": 48.8172481,
-      "longitude": 2.3264137,
-      "altitude": 1.00,
+      "latitude": 48.8172516,
+      "longitude": 2.3264002,
+      "altitude": 0.80,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027E9B",
-      "latitude": 48.8172536,
-      "longitude": 2.3265783,
-      "altitude": 0.00,
+      "latitude": 48.8172443,
+      "longitude": 2.3265622,
+      "altitude": 0.08,
       "pin_mode": "Yes"
     }
   ],
   "transform": {
-    "latitude": 48.8172592,
-    "longitude": 2.3264084,
+    "latitude": 48.8172612,
+    "longitude": 2.3264568,
     "longitude_factor": 1
   }
 }

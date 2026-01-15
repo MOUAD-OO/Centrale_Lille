@@ -41,6 +41,31 @@ class PathAnalyzer:
             (self.real_path[:min_len, 1] - est_path[:min_len, 1])**2
         )
         return distances
+    def compute_distances(self, est_path,a=-0.22,b=140):
+        """
+        Compute perpendicular distances from trajectory points to a line y = a*x + b.
+
+        Parameters
+        ----------
+        traj : np.ndarray, shape (N, 2)
+            Trajectory points (x, y)
+        a : float
+            Line slope
+        b : float
+            Line intercept
+
+        Returns
+        -------
+        distances : np.ndarray, shape (N,)
+            Perpendicular distances to the line
+        """
+        min_len = min(len(self.real_path), len(est_path))
+        x = est_path[:min_len, 0]
+        y = est_path[:min_len, 1]
+
+        distances = np.abs(a * x - y + b) / np.sqrt(a**2 + 1)
+        return distances
+        
 
     def compute_rmse(self, distances):
         """Compute cumulative RMSE over time."""
@@ -52,8 +77,9 @@ class PathAnalyzer:
 
     def coordinate_with_max_error(self, est_path):
         """Determine which coordinate (X or Y) contributes the most to the error."""
-        x_error = np.abs(self.real_path[:, 0] - est_path[:, 0])
-        y_error = np.abs(self.real_path[:, 1] - est_path[:, 1])
+        min_len = min(len(self.real_path), len(est_path))
+        x_error = np.abs(self.real_path[:min_len, 0] - est_path[:min_len, 0])
+        y_error = np.abs(self.real_path[:min_len, 1] - est_path[:min_len, 1])
         x_mean_error = np.mean(x_error)
         y_mean_error = np.mean(y_error)
         return "X" if x_mean_error > y_mean_error else "Y", x_mean_error, y_mean_error
@@ -143,7 +169,7 @@ class PathAnalyzer:
     def plot_static_paths(self):
         """Plot all paths statically."""
         plt.figure(figsize=(10, 8))
-        anchor_positions = np.load("/home/nathan/Dynamic_Loc/generating_bloc/anchor_positions.npy")
+        anchor_positions = np.load("generating_bloc/anchor_positions.npy")
         plt.scatter(anchor_positions[:, 0], anchor_positions[:, 1], c='red', label='Anchors')
         plt.plot(self.real_path[:, 0], self.real_path[:, 1], marker='o', markersize=4,
                  linestyle='-', alpha=0.7, color="green", label="Real Path")
@@ -153,6 +179,10 @@ class PathAnalyzer:
         if self.est_path_2 is not None:
             plt.plot(self.est_path_2[:, 0], self.est_path_2[:, 1], marker='x', markersize=4,
                      linestyle='-.', alpha=0.5, color="orange", label="Estimation 2")
+        for i in range (min(len(self.est_path_1),len(self.est_path_2))):
+            X=[self.est_path_1[i,0],self.est_path_2[i,0]]
+            Y =[self.est_path_1[i,1],self.est_path_2[i,1]]
+            #plt.plot(X,Y,c="red")
         plt.xlabel("X (cm)")
         plt.ylabel("Y (cm)")
         plt.title("Static Path Comparison")
@@ -198,7 +228,7 @@ class PathAnalyzer:
         plt.show()
 
 
-    def plot_paths_on_real_map(self, anchors_json_path="/home/nathan/Dynamic_Loc/generating_bloc/woltDynDev.json"):
+    def plot_paths_on_real_map(self, anchors_json_path="generating_bloc/woltDynDev.json"):
         """
         Create a REAL interactive OpenStreetMap and open it automatically.
         """
@@ -227,7 +257,7 @@ class PathAnalyzer:
         )
 
         # ---- ANCHORS ----
-        anchor_positions = np.load("/home/nathan/Dynamic_Loc/generating_bloc/anchor_positions.npy")
+        anchor_positions = np.load("generating_bloc/anchor_positions.npy")
         for position in anchor_positions:
             ax=position[0]
             ay= position[1]
@@ -260,7 +290,7 @@ class PathAnalyzer:
     
     def plot_moving_paths(self, interval=100):
         """Animate paths moving point by point."""
-        anchor_positions = np.load("/home/nathan/Dynamic_Loc/generating_bloc/anchor_positions.npy")
+        anchor_positions = np.load("generating_bloc/anchor_positions.npy")
 
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.scatter(anchor_positions[:, 0], anchor_positions[:, 1], c='red', label='Anchors')
@@ -298,7 +328,7 @@ class PathAnalyzer:
 def main():
     config = configparser.ConfigParser()
     config.read('generator_config.ini')
-    frequency = config.getint('GENERATE','freq',fallback=4)
+    frequency = config.getint('GENERATE','freq',fallback=2)
     parser = argparse.ArgumentParser(description="Compare up to two estimated trajectories to a real trajectory")
     parser.add_argument("--est1", type=str, help="Path to the first estimated trajectory file")
     parser.add_argument("--est2", type=str, help="Path to the second estimated trajectory file")
@@ -316,7 +346,7 @@ def main():
             mean_error = analyzer.compute_mean_error(distances)
             coord, x_error, y_error = analyzer.coordinate_with_max_error(est_path)
             print(f"[Estimation {idx}] Mean distance error: {mean_error:.2f} cm")
-            print(f"[Estimation {idx}] Coordinate with the most error: {coord} (X error: {x_error:.2f} cm, Y error: {y_error:.2f} cm)")
+            #print(f"[Estimation {idx}] Coordinate with the most error: {coord} (X error: {x_error:.2f} cm, Y error: {y_error:.2f} cm)")
             print(f"[Estimation {idx}] Final RMSE: {rmses[-1]:.2f} cm")
             print(f"[Estimation {idx}] Max distance: {np.max(distances):.2f} cm")
 
@@ -329,7 +359,7 @@ def main():
     analyzer.plot_speed_acceleration(frequency)
     analyzer.plot_static_paths()
     analyzer.plot_moving_paths()
-    #analyzer.plot_paths_on_real_map()
+    analyzer.plot_paths_on_real_map()
     
     
     #analyzer.plot_X_evolution()

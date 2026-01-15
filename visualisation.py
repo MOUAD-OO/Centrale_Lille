@@ -8,7 +8,9 @@ import itertools
 anchors = np.load("generating_bloc/anchor_positions.npy")
 
 fig, ax = plt.subplots(figsize=(16,12))
-
+x=[-1140,1238]
+y=[368,-107.6]
+ax.plot(x,y, linestyle='--', color='gray', label='Chemin idéal')
 ax.scatter(anchors[:,0],anchors[:,1],marker='s',label= "Anchors",c='black')
 trajectories = []
 lines = []
@@ -46,7 +48,7 @@ def refresh_files():
                 continue
             filenames.append(f)
             trajectories.append(traj)
-            line, = ax.plot([], [], marker='o', markersize=4, linestyle='-', alpha=0.7, label=f)
+            line, = ax.plot([], [], marker='o', markersize=3, linestyle='-', alpha=0.7, label=f, linewidth=2)
             lines.append(line)
             file_info[f] = {"mtime": mtime, "index": len(trajectories) - 1}
             ax.legend()
@@ -90,7 +92,7 @@ def update(frame):
     return lines
 
 # Run the animation indefinitely; update() will pick up new files as they appear.
-ani = FuncAnimation(fig, update, frames=itertools.count(), interval=500, blit=False)
+ani = FuncAnimation(fig, update, frames=itertools.count(), interval=10, blit=False)
 
 plt.axis('equal')
 plt.legend()

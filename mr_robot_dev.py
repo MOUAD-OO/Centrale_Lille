@@ -4,10 +4,10 @@ import json
 from time import sleep
 import argparse
 from collections import deque
-import asyncio
+from shapely.geometry import Point, Polygon
 from data_preparing.predict_path_inc import PositionEstimator
 from data_preparing.clean_positions import noise_cleaning
-import sys
+import traceback
 
 # ---------------------------
 # Argument parsing
@@ -38,7 +38,7 @@ data = {tag: [] for tag in tags}
 trajectories = {tag: np.empty((1,1,3)) for tag in tags}
 positions = {tag: [] for tag in tags}
 pending_tasks = []
-
+initialisation_traj={tag: True for tag in tags}
 # ---------------------------
 # Functions
 # ---------------------------
@@ -92,20 +92,23 @@ def process_metadata(list_meta_data, tags, UID, data, positions):
         row = {"time stamp": line["timestamp"]}
         for anchor_uid in UID.keys():
             distance = line["poi"]["anchors"].get(anchor_uid, {}).get("dst", 0)
+                
+            #val = np.sqrt(distance**2 - (0.1 - (UID[anchor_uid]) )**2)
             
-            if distance != 0:
-                try:
-                    row[anchor_uid] = np.sqrt(distance ** 2 - (0 - UID[anchor_uid]) ** 2) * 100  # meters -> cm
-                except ValueError:
-                    row[anchor_uid] = distance*100
+            if distance!=0:
+                row[anchor_uid] = distance * 100-30
             else:
-                row[anchor_uid] = distance*100
+                row[anchor_uid] = 0
+                #row[anchor_uid] = val * 100
+
         
         # Append position
         positions[tag].append([float(line["latitude"]), float(line["longitude"])])
-        save_positions_cartesian(positions[tag], 1,out_cm=f"{tag}positions_cartesian_cm.npy")
+        save_positions_cartesian(positions[tag], 1,out_cm=f"{tag}positions_cartesian_cm{movement}.npy")
         # Append row
         data[tag].append(row)
+        
+        
 
 def intersection_cercles(x0, y0, r0, x1, y1, r1):
     d = np.hypot(x1 - x0, y1 - y0)
@@ -131,7 +134,7 @@ def intersection_cercles(x0, y0, r0, x1, y1, r1):
     
     return [p1, p2]
 
-def kalman_filter(positions, time_window = 3, coeff=0.25, freq=1):
+def kalman_filter(positions, time_window = 4, coeff=0.3, freq=1):
     """
     Apply a simplified Kalman-like filter on the entire trajectory.
 
@@ -144,6 +147,10 @@ def kalman_filter(positions, time_window = 3, coeff=0.25, freq=1):
     Returns:
         np.ndarray: filtered trajectory, same shape as positions
     """
+    if coeff < 0 or coeff > 1:
+        coeff = 0.3
+        print("Coefficient must be between 0 and 1")
+        
     n, d = positions.shape
     d=d-1
     dt = 1.0 / freq
@@ -162,10 +169,7 @@ def kalman_filter(positions, time_window = 3, coeff=0.25, freq=1):
         if old_dt == 0:
             old_velocity = np.zeros(d)
         else:
-            v = (pos_n_1 - pos_start) / old_dt
-            if np.linalg.norm(v) >300:
-                old_velocity = v #cap velocity 
-
+            old_velocity = (pos_n_1 - pos_start) / old_dt
         # Extrapolate to current step
         new_dt = dt
         estimated_pos = pos_n_1 + old_velocity * new_dt
@@ -176,89 +180,200 @@ def kalman_filter(positions, time_window = 3, coeff=0.25, freq=1):
 
     return np.array(filtered)
 
-def prediction(df,trajectory):
-    estimator=PositionEstimator()
-    
+def post_filtre(trajectory:np.ndarray ,raw_trajectory,incertitude_polygon: np.ndarray):
+    """Return a filtered trajectory where each element is a consistent [x, y, time] triple.
+
+    - `trajectory` is expected to be an (n, 2) or (n, 3) array with at least x,y.
+    - `raw_trajectory` is expected to be an (n, 3) array containing original x,y,time.
+    - `incertitude_polygon` is a list/array of polygons aligned with `trajectory`.
+
+    This function ensures the returned array has homogeneous rows (same length) so numpy
+    can build a regular ndarray instead of a ragged one.
+    """
+    filtred_trajecory = []
+
+    for i in range(len(trajectory)):
+        position = trajectory[i]
+
+        # safe access to polygon: if missing or empty, treat as "outside"
+        polygon = incertitude_polygon[i] if i < len(incertitude_polygon) else None
+        is_inside = False
+
+        try:
+            if polygon is not None and getattr(polygon, "size", 1) != 0 and len(polygon) >= 3:
+                pt = Point(position[:2])
+                poly = Polygon(polygon)
+                is_inside = poly.touches(pt) or poly.contains(pt)
+        except Exception:
+            # Any error in polygon handling -> treat as outside
+            is_inside = False
+
+        # get a safe time value from raw_trajectory if possible
+        time_val = None
+        if i < len(raw_trajectory):
+            try:
+                time_val = float(raw_trajectory[i][2])
+            except Exception:
+                time_val = float(i)
+        else:
+            time_val = float(i)
+
+        if is_inside:
+            # ensure consistent [x,y,time]
+            filtred_trajecory.append([float(position[0]), float(position[1]), time_val])
+        else:
+            # fallback to the original raw point (force floats)
+            r = raw_trajectory[i]
+            filtred_trajecory.append([float(r[0]), float(r[1]), float(r[2])])
+
+    # keep the previous outer-wrap behavior (1, n, 3) for compatibility
+    return np.array([filtred_trajecory])
+        
+
+def prediction(df, trajectory, initialisation_traj):
+
+    estimator = PositionEstimator()
+
     distance = df
-    anchors_path = "generating_bloc/woltDynDev.json" #Hardcoded for now
-    step = len(trajectory)-1
-    new_path = list(trajectory[0] )
+    distance = distance.fillna(0)
+
+    anchors_path = "generating_bloc/woltDynDev.json"  # Hardcoded for now
+
+    if not initialisation_traj:
+        step = len(trajectory) - 1
+        new_path = list(trajectory[0])
+    else:
+        step = 0
+        new_path = []
+
     while step < len(distance):
 
         try:
-            estimated_position = estimator.estimate_position(distance, anchors_path, step)
-   
-            new_path.append([estimated_position[0],estimated_position[1],step*(1/estimator.freq)])
-            if estimator.STATUS[0]=="1_DATA" :
-                kalman_pos=kalman_filter(np.array(new_path) ,coeff=0.7,time_window=5)[step,:2]
-            
-            if estimator.STATUS[0] == "2_DATA" :
-                anchors=estimator.STATUS[1]
+            estimated_position = estimator.estimate_position(
+                distance, anchors_path, step
+            )
 
-                
-                dots = intersection_cercles(anchors[0][0][0],anchors[0][0][1],anchors[0][1],
-                                            anchors[1][0][0],anchors[1][0][1],anchors[1][1])
+            new_path.append([
+                estimated_position[0],
+                estimated_position[1],
+                step * (1 / estimator.freq)
+            ])
 
-                kalman_pos=kalman_filter(np.array(new_path) ,coeff=1)[step,:2]
-                    # Safe handling when circles do not intersect (intersection_cercles returns None)
+            if estimator.STATUS[0] == "1_DATA":
+                kalman_pos = kalman_filter(
+                    np.array(new_path),
+                    coeff=0.7,
+                    time_window=5
+                )[step, :2]
+
+            if estimator.STATUS[0] == "2_DATA":
+                anchors = estimator.STATUS[1]
+
+                dots = intersection_cercles(
+                    anchors[0][0][0], anchors[0][0][1], anchors[0][1],
+                    anchors[1][0][0], anchors[1][0][1], anchors[1][1]
+                )
+
+                kalman_pos = kalman_filter(
+                    np.array(new_path),
+                    coeff=1
+                )[step, :2]
+
+                # Safe handling when circles do not intersect (intersection_cercles returns None)
                 if dots is None:
                     # fallback to Kalman prediction
                     new_path[step][0] = kalman_pos[0]
                     new_path[step][1] = kalman_pos[1]
-           
+
                     print("Warning: circles do not intersect — using Kalman prediction")
                 else:
                     p1, p2 = dots
+
                     # choose the intersection point closest to Kalman prediction
-                    if np.linalg.norm(kalman_pos - np.array(p1)) <= np.linalg.norm(kalman_pos - np.array(p2)):
+                    if np.linalg.norm(kalman_pos - np.array(p1)) <= np.linalg.norm(
+                        kalman_pos - np.array(p2)
+                    ):
                         chosen = p1
                     else:
                         chosen = p2
+
                     new_path[step][0] = chosen[0]
                     new_path[step][1] = chosen[1]
 
-                    print("Warning : Only two anchors are detected. Taking the closest position to Kalman prediction ")
-               
-            if estimator.STATUS[0]== "0_DATA" :
-                kalman_pos=kalman_filter(np.array(new_path) ,coeff=0.9,time_window=7)[step,:2]
+                    print(
+                        "Warning : Only two anchors are detected. "
+                        "Taking the closest position to Kalman prediction "
+                    )
+
+            if estimator.STATUS[0] == "0_DATA":
+                kalman_pos = kalman_filter(
+                    np.array(new_path),
+                    coeff=0.9,
+                    time_window=7
+                )[step, :2]
+
                 new_path[step][0] = kalman_pos[0]
                 new_path[step][1] = kalman_pos[1]
-                print("Warning : No anchor is detected. Taking position as the Kalman prediction ")
-            
-            if estimator.STATUS[0]== "OPTIMIZATION_FAIL" :
-                new_position = estimator.estimate_position(distance, anchors_path, step)
-                new_path[step]=[new_position[0],new_position[1],step*(1/estimator.freq)]
+
+                print(
+                    "Warning : No anchor is detected. "
+                    "Taking position as the Kalman prediction "
+                )
+
+            if estimator.STATUS[0] == "OPTIMIZATION_FAIL":
+                new_position = estimator.estimate_position(
+                    distance, anchors_path, step
+                )
+                new_path[step] = [
+                    new_position[0],
+                    new_position[1],
+                    step * (1 / estimator.freq)
+                ]
                 pass
-    
-            step+=1
+
+            step += 1
+
         except ValueError as e:
             print("ValueError :", e)
-            df.to_csv(f"error_distance_{step}.csv",index=False)
+            df.to_csv(f"error_distance_{step}.csv", index=False)
             print("step =", step)
-            break    
-        
-    new_path = np.array(new_path) 
-    raw_path=new_path.copy()
-    new_path=noise_cleaning(new_path, window_size=3)
+            break
 
-    filtered_path= kalman_filter(new_path[0])
+    new_path = np.array(new_path)
+    raw_path = new_path.copy()
 
-    filtered_path=np.array([filtered_path])
-    raw_path=np.array([raw_path])
-    #np.save(estimator.output, filtered_path)      
-    return  filtered_path,raw_path
+    new_path = noise_cleaning(new_path, window_size=3)
 
-def run_predictor(tag,rows,trajectories,movement=movement):
-    global last_hist_len
+    try:
+        inc_coeff = 0.3 
+    except Exception:
+        inc_coeff = 0.3
+
+    filtered_path = kalman_filter(
+        new_path[0],
+        coeff=inc_coeff
+    )
+
+    filtered_path =post_filtre(filtered_path,raw_path,estimator.polygons_reduit)
+    #filtered_path =np.array([filtered_path])
+    raw_path = np.array([raw_path])
+
+   
+    return filtered_path, raw_path
+
+
+
+def run_predictor(tag,rows,trajectories,initialisation_traj=initialisation_traj,movement=movement):
+    
     print("Running run_predictor")
     
-    #rows = rows[last_hist_len:]
-    last_hist_len = max(0, len(trajectories[tag][0])-1)
     df = pd.DataFrame(rows)
     print("Carried DATA size :",tag,len(df))
     transform(df,freq=1)
-    filtered_trajectory,trajectories[tag]= prediction(df,trajectories[tag])
+    filtered_trajectory,trajectories[tag]= prediction(df,trajectories[tag],initialisation_traj[tag])
+    initialisation_traj[tag]= False
     np.save(f"test_site/trajectories/{movement}_{tag}.npy", filtered_trajectory)
+    np.save(f"Raw{tag}.npy",trajectories[tag])
 
     df.to_csv(f"test_site/{movement}_{tag}_distance.csv",index=False)
     
@@ -289,6 +404,7 @@ while True:
                 sleep(2)
                 continue
             process_metadata(new_lines, tags, UID, data, positions)
+            
             for tag, rows in data.items():
                 if rows:
                     run_predictor(tag,rows ,trajectories)
@@ -298,6 +414,7 @@ while True:
                 
     except Exception as e:
         print(f"Error: {e}")
+        traceback.print_exc()
         sleep(2)
 
             

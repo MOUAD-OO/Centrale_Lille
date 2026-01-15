@@ -1,0 +1,9 @@
+algo,Mean_dist_1,RMSE_1,Max_dist_1,Mean_dist_2,RMSE_2,Max_dist_2,LFE
+v7,37.43,43.23,87.85,34.30,39.40,78.66,36.42
+v5,36.98,44.04,81.95,32.3,39.11,94.09,30.35
+Raw_speed_and acceleration_Filter,30.90,36.14,71.79,27.50,31.39,62.80,31.68
+Raw_Kalman_Filter,35.88,43.87,81.95,33.43,39.49,79.57,37.03
+Raw_speed_and acceleration_K_Filter,31.41,36.77,73.16,28.18,32.27,65.30,32.38
+Incertitude,35.28,49.80,192.42,29.76,45.42,179.51,43.06
+Incertitude_speed_and acceleration_Filter,23.38,28.02,62.88,20.20,23.69,64.81,28.71
+Incertitude_speed_and acceleration_K_Filter,24.00,28.51,62.8,20.68,23.95,63.0,28.90

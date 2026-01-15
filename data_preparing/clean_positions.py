@@ -66,7 +66,7 @@ def noise_cleaning(paths: np.ndarray, window_size: int = 3, freq=freq) -> np.nda
 
         # --- Step 2: Adaptive exponential smoothing ---
         for j in range(n):
-            start = max(0, j - window_size // 2)
+            start = max(1, j - window_size // 2)
             end = min(n, j + window_size // 2 + 1)
             window = filtered_path[start:end, :2]
 

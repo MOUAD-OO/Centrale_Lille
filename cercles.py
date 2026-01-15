@@ -11,8 +11,7 @@ from scipy.optimize import least_squares
 
 
 
-idx =0
-
+idx =1
 
 
 
@@ -26,7 +25,7 @@ def anchors(anchors_path:str)->dict:
     return anchors_positions
 
 anchor_position =anchors(anchor_path)
-data=pd.read_csv('test_site/test_001BC50C70027E47.csv', sep= ',')
+data=pd.read_csv('test_site/turn_001BC50C70027E04_distance.csv', sep= ',')
 
 anchors_cercles_list = []
 
@@ -63,48 +62,9 @@ for i, anchors_cercles in enumerate(anchors_cercles_list):
 
 
 
-input = "test_site/test_001BC50C70027E47.csv"
+input = "test_site/turn_001BC50C70027E04_distance.csv"
 
 
-def matrix_traitment(matrix: pd.DataFrame) -> pd.DataFrame:
-    matrix = matrix.copy()
-    
-    # Replace zeros with NaN so we can interpolate
-    matrix.replace(0, np.nan, inplace=True)
-    
-    # Apply interpolation column by column
-    for column in matrix.columns:
-        col_values = matrix[column].values  # get as numpy array
-        n = len(col_values)
-        i = 0
-        
-        while i < n:
-            if np.isnan(col_values[i]):
-                start = i - 1 if i > 0 else None
-                
-                # find end of NaN run
-                j = i
-                while j < n and np.isnan(col_values[j]):
-                    j += 1
-                
-                end = j if j < n else None
-                
-                if start is None:  # NaNs at the beginning
-                    col_values[0:j] = col_values[j]
-                elif end is None:  # NaNs at the end
-                    col_values[i:n] = col_values[start]
-                else:  # interpolate between start and end
-                    num_missing = j - start + 1
-                    interp = np.linspace(col_values[start], col_values[end], num_missing)
-                    col_values[start+1:end] = interp[1:-1]
-                
-                i = j  # skip to end of NaN run
-            else:
-                i += 1
-        
-        matrix[column] = col_values
-    
-    return matrix
 
 
 def dist(p1:np.ndarray, p2:np.ndarray)->float:
@@ -209,11 +169,13 @@ upper_bounds = anchor_array.max(axis=0)  # [max_x, max_y]
 x_history_list=[]
 new_path=[]
 for step in range(len(distance['time stamp'])):
-    X0=initial_guess(distance,step,anchors_path)
+
+    x0 = initial_guess(distance, step, anchors_path)
+    print(f"step={step}, x0={x0}, finite={np.isfinite(x0).all()}")
     x_history= []
     anchors_positions = anchors(anchors_path)   # dict {UID: position}
     distance_ = measur_at_step(distance, step) 
-    solution=least_squares(residual_function,x0=X0,loss='huber', tr_solver='exact',args=(distance_,anchors_positions,step))
+    solution=least_squares(residual_function,x0=x0,loss='huber', tr_solver='exact',args=(distance_,anchors_positions,step))
    
     pos_time=list(solution.x)
     new_path.append(pos_time)
@@ -230,12 +192,12 @@ for i in range(len(x_history_list)) :
         arr=x_history_list[i]
         plt.plot(arr[:,0], arr[:,1], 'x',linestyle='-',color='red',alpha=0.2)
 
-real_path=np.load('test_site/trajectories/test_signed_001BC50C70027E47.npy')[0]
+real_path=np.load('001BC50C70027E04positions_cartesian_cmturn.npy')[0]
 
 plt.axis('equal')
 plt.plot(new_path[idx,0], new_path[idx,1], 's',linestyle='dashed',label='The predicted Position')
 #plt.plot(new_path[:,0], new_path[:,1], 'x',linestyle='dashed',label='The predicted Position')
-#plt.plot(real_path[idx,0],real_path[idx,1], 'o',linestyle='-')
+plt.plot(real_path[idx,0],real_path[idx,1], 'o',linestyle='-')
 plt.legend()
 plt.xlabel("X (cm)")
 plt.ylabel("Y (cm)")
