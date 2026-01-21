@@ -98,5 +98,5 @@ ani = FuncAnimation(fig, update, frames=itertools.count(), interval=300, blit=Fa
 plt.axis('equal')
 plt.legend()
 plt.grid()
-ani.save("animation.mp4", writer="ffmpeg", fps=3)
+#ani.save("animation.mp4", writer="ffmpeg", fps=3)
 plt.show()
