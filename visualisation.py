@@ -9,7 +9,7 @@ anchors = np.load("generating_bloc/anchor_positions.npy")
 
 fig, ax = plt.subplots(figsize=(16,12))
 x=[-1140,1238]
-y=[368,-107.6]
+y=[290.2,-279.74]
 ax.plot(x,y, linestyle='--', color='gray', label='Chemin idéal')
 ax.scatter(anchors[:,0],anchors[:,1],marker='s',label= "Anchors",c='black')
 trajectories = []
@@ -24,6 +24,7 @@ def load_trajectory(path):
         return traj
     except Exception:
         return None
+
 
 def refresh_files():
     """Scan directory for .npy trajectory files and update internal lists.
@@ -62,7 +63,6 @@ def refresh_files():
                 file_info[f]["mtime"] = mtime
 
 
-
 def update(frame):
     refresh_files()
     all_x = []
@@ -91,12 +91,12 @@ def update(frame):
             line.set_data(traj[:n, 0], traj[:n, 1])
     return lines
 
+
 # Run the animation indefinitely; update() will pick up new files as they appear.
-ani = FuncAnimation(fig, update, frames=itertools.count(), interval=10, blit=False)
+ani = FuncAnimation(fig, update, frames=itertools.count(), interval=300, blit=False)
 
 plt.axis('equal')
 plt.legend()
 plt.grid()
+ani.save("animation.mp4", writer="ffmpeg", fps=3)
 plt.show()
-
-

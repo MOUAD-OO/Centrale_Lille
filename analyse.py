@@ -41,8 +41,9 @@ class PathAnalyzer:
             (self.real_path[:min_len, 1] - est_path[:min_len, 1])**2
         )
         return distances
-    def compute_distances(self, est_path,a=-0.22,b=140):
-        """
+    """
+    def compute_distances(self, est_path,a=-0.24,b=18):
+        
         Compute perpendicular distances from trajectory points to a line y = a*x + b.
 
         Parameters
@@ -58,14 +59,14 @@ class PathAnalyzer:
         -------
         distances : np.ndarray, shape (N,)
             Perpendicular distances to the line
-        """
+        
         min_len = min(len(self.real_path), len(est_path))
         x = est_path[:min_len, 0]
         y = est_path[:min_len, 1]
 
         distances = np.abs(a * x - y + b) / np.sqrt(a**2 + 1)
         return distances
-        
+    """
 
     def compute_rmse(self, distances):
         """Compute cumulative RMSE over time."""
@@ -119,7 +120,7 @@ class PathAnalyzer:
 
     def plot_speed_acceleration(self, frequency):
         """Plot speed and acceleration for all paths."""
-        time_real = self.real_path[:, 2]
+        time_real = self.est_path_1[:, 2]
         plt.figure(figsize=(12, 6))
         # Speed plot
         plt.subplot(2, 1, 1)
@@ -252,7 +253,8 @@ class PathAnalyzer:
         # Create map centered on transform
         m = folium.Map(
         location=[ref_lat, ref_lon],
-        zoom_start=19,
+        max_zoom=52, 
+        zoom_start=20,
         tiles="CartoDB Positron"
         )
 
@@ -264,21 +266,21 @@ class PathAnalyzer:
             lat, lon = xy_to_latlon(ax/100, ay/100)
             folium.CircleMarker(
                 location=[lat, lon],
-                radius=1, color="red", fill=True, popup="Anchor"
+                radius=2, color="red", fill=True, popup="Anchor"
             ).add_to(m)
 
         # ---- REAL PATH ----
         real_coords = [xy_to_latlon(x/100, y/100) for x,y,_ in self.real_path]
-        folium.PolyLine(real_coords, color="green", weight=0.2, popup="Real Path").add_to(m)
+        folium.PolyLine(real_coords, color="orange", weight=0.6, popup="Real Path").add_to(m)
 
         # ---- ESTIMATED PATHS ----
         if hasattr(self, "est_path_1") and self.est_path_1 is not None:
             est_coords = [xy_to_latlon(x/100, y/100) for x,y,_ in self.est_path_1]
-            folium.PolyLine(est_coords, color="blue", weight=0.2, popup="Estimation 1").add_to(m)
+            folium.PolyLine(est_coords, color="blue", weight=0.6, popup="Estimation 1").add_to(m)
 
         if hasattr(self, "est_path_2") and self.est_path_2 is not None:
             est_coords = [xy_to_latlon(x/100, y/100) for x,y,_ in self.est_path_2]
-            folium.PolyLine(est_coords, color="orange", weight=0.2, popup="Estimation 2").add_to(m)
+            folium.PolyLine(est_coords, color="green", weight=0.7, popup="Estimation 2").add_to(m)
 
         # ---- SAVE AND AUTO OPEN ----
         out_file = "paths_map.html"

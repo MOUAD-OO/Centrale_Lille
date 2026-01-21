@@ -1,9 +1,0 @@
-algo,LFE,Mean_dist,RMSE,Max_dist,Overall_score,amélioration_%
-Locengine,36.42,35.86,41.32,83.26,49.22,0.0
-Algo_Raw,30.35,34.64,41.58,88.02,48.65,1.16
-Raw_speed_and acceleration_Filter,31.68,29.2,33.76,67.3,40.48,17.76
-Raw_Kalman_Filter,37.03,34.66,41.68,80.76,48.53,1.4
-Raw_speed_and acceleration_K_Filter,32.38,29.8,34.52,69.23,41.48,15.73
-Incertitude,43.06,32.52,47.61,185.96,77.29,-57.03
-Incertitude_speed_and acceleration_Filter,28.71,21.79,25.86,63.84,35.05,28.79
-Incertitude_speed_and acceleration_K_Filter,28.9,22.34,26.23,62.9,35.09,28.71

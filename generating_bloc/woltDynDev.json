@@ -2,64 +2,64 @@
   "devices": [
     {
       "uid": "001BC50C70027DC4",
-      "latitude": 48.8173017,
-      "longitude": 2.3264492,
-      "altitude": 1.20,
+      "latitude": 48.8172973,
+      "longitude": 2.3264559,
+      "altitude": 1.40,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027DD9",
-      "latitude": 48.8172788,
-      "longitude": 2.3265843,
-      "altitude": 1.50,
+      "latitude": 48.8172786,
+      "longitude": 2.3265833,
+      "altitude": 1.65,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027DDA",
-      "latitude": 48.8172878,
-      "longitude": 2.3263345,
-      "altitude": 0.52,
+      "latitude": 48.8172752,
+      "longitude": 2.3263845,
+      "altitude": 0.48,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027DF5",
-      "latitude": 48.8172216,
-      "longitude": 2.3264670,
+      "latitude": 48.8172194,
+      "longitude": 2.3264800,
       "altitude": 0.81,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027E14",
-      "latitude": 48.8172671,
-      "longitude": 2.3265216,
+      "latitude": 48.8172596,
+      "longitude": 2.3265226,
       "altitude": 0.64,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027E75",
-      "latitude": 48.8172364,
-      "longitude": 2.3263355,
+      "latitude": 48.8172359,
+      "longitude": 2.3263362,
       "altitude": 0.81,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027E81",
-      "latitude": 48.8172516,
-      "longitude": 2.3264002,
+      "latitude": 48.8172450,
+      "longitude": 2.3264036,
       "altitude": 0.80,
       "pin_mode": "Yes"
     },
     {
       "uid": "001BC50C70027E9B",
-      "latitude": 48.8172443,
-      "longitude": 2.3265622,
+      "latitude": 48.8172439,
+      "longitude": 2.3265632,
       "altitude": 0.08,
       "pin_mode": "Yes"
     }
   ],
   "transform": {
-    "latitude": 48.8172612,
-    "longitude": 2.3264568,
+    "latitude": 48.8172611,
+    "longitude": 2.3264655,
     "longitude_factor": 1
   }
 }

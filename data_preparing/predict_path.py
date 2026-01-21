@@ -13,7 +13,28 @@ import time
 
 
 class PositionEstimator:
+    """
+    PositionEstimator handles trajectory estimation from noisy distance measurements.
+
+    It loads configuration parameters, parses command-line arguments, 
+    provides utility functions for distance calculations and data loading, 
+    and estimates positions using a weighted initial guess and least-squares optimization.
+
+    Attributes:
+        config (ConfigParser): Configuration loaded from a .ini file.
+        freq (float): Measurement frequency in Hz.
+        input (str): Path to input CSV containing noisy positions.
+        output (str | None): Path to output file (.npy), set after CLI parsing.
+        STATUS (list): Optional list capturing estimation status for each step.
+    """
+    
     def __init__(self, config_path: str = "generator_config.ini"):
+        """
+        Initialize the estimator by loading parameters from a configuration file.
+
+        Args:
+            config_path (str): Path to the configuration .ini file. Defaults to "generator_config.ini".
+        """
         # Load configuration
         self.config = configparser.ConfigParser()
         self.config.read(config_path)
@@ -24,7 +45,11 @@ class PositionEstimator:
         self.output = None
 
     def parse_arguments(self):
-        """Parse CLI arguments and update object attributes."""
+        """
+        Parse command-line arguments to update input, output, and measurement frequency.
+
+        CLI arguments take priority over configuration file values.
+        """
         parser = argparse.ArgumentParser(
             description="Estimate path from distance matrix with handling missing data"
         )
@@ -55,6 +80,15 @@ class PositionEstimator:
 
     @staticmethod
     def load_anchors(anchors_path: str) -> dict:
+        """
+        Load anchor positions from a JSON file.
+
+        Args:
+            anchors_path (str): Path to the JSON file containing anchors.
+
+        Returns:
+            dict: Mapping of anchor IDs to their positions.
+        """        
         with open(anchors_path, "r") as f:
             data = json.load(f)
         ref_data = data["transform"]
@@ -64,16 +98,37 @@ class PositionEstimator:
 
     @staticmethod
     def measur_at_step(dist_matrix: pd.DataFrame, step: int) -> pd.Series:
+        """
+        Retrieve the distance measurements at a specific time step.
+
+        Args:
+            dist_matrix (pd.DataFrame): Full distance matrix.
+            step (int): Index of the step to extract.
+
+        Returns:
+            pd.Series: Distances for all anchors at the specified step.
+        """
+        
         dist_matrix = dist_matrix.drop(columns=["time stamp"])
         return dist_matrix.iloc[step]
 
     # ----------------------
     # Core estimation logic
     # ----------------------
-    def initial_guess(self, distance: pd.DataFrame, step: int, anchors_path: str) -> np.ndarray:
+    def initial_guess(self, distance: pd.DataFrame, step: int, anchors_path: str) -> np.ndarray :
         """
-        Weighted average initial guess to reduce outliers & optimize convergence
-        """
+        Compute a weighted initial guess for position based on inverse distances.
+
+        Weighted average reduces the influence of outliers and improves convergence.
+
+        Args:
+            distance (pd.DataFrame): Distance matrix.
+            step (int): Step index to compute initial guess.
+            anchors_path (str): Path to anchor JSON file.
+
+        Returns:
+            np.ndarray: Initial guess coordinates (x, y).
+        """        
         distance_step = self.measur_at_step(distance, step)
         anchors_position = self.load_anchors(anchors_path)
 
@@ -92,6 +147,20 @@ class PositionEstimator:
         return X0[:2]
 
     def residuals(self, x: np.ndarray, distance: pd.Series, anchors_position: dict) -> list:
+        """
+        Compute residuals for least-squares optimization.
+
+        The residuals are weighted and include an outlier-penalizing term.
+        Handles missing measurements and tracks estimation status.
+
+        Args:
+            x (np.ndarray): Estimated position (x, y).
+            distance (pd.Series): Measured distances to anchors.
+            anchors_position (dict): Dictionary of anchor positions.
+
+        Returns:
+            list: Residuals for optimization.
+        """        
         outside_scale = 4
         MEW = 2
         residuals = []
@@ -123,6 +192,18 @@ class PositionEstimator:
 
         return residuals
     def new_estimate(self,distance: pd.DataFrame,last_dot, anchors_path: str, step: int):
+        """
+        Compute a new position estimate based on the previous position.
+
+        Args:
+            distance (pd.DataFrame): Distance matrix.
+            last_dot (np.ndarray): Previous estimated position.
+            anchors_path (str): Path to anchors JSON file.
+            step (int): Step index for the estimation.
+
+        Returns:
+            np.ndarray: Estimated position (x, y).
+        """        
         anchors_position = self.load_anchors(anchors_path)
         dist_step = self.measur_at_step(distance, step)
         result = least_squares(self.residuals,x0=last_dot,loss='huber', tr_solver='exact',args=(dist_step,anchors_position))
@@ -133,9 +214,20 @@ class PositionEstimator:
         return np.array(estimated_positions)
         
     def estimate_position(self,distance: pd.DataFrame, anchors_path: str, step: int)-> np.ndarray:
-        anchors_position = self.load_anchors(anchors_path)
+        """
+        Estimate the position at a given step using least-squares optimization.
 
-    
+        Starts from a weighted initial guess to improve convergence.
+
+        Args:
+            distance (pd.DataFrame): Distance matrix.
+            anchors_path (str): Path to anchors JSON file.
+            step (int): Step index to estimate.
+
+        Returns:
+            np.ndarray: Estimated position (x, y).
+        """       
+        anchors_position = self.load_anchors(anchors_path)
         dist_step = self.measur_at_step(distance, step)
         x0 = self.initial_guess(distance, step, anchors_path)
         result = least_squares(self.residuals,x0=x0,loss='huber', tr_solver='exact',args=(dist_step,anchors_position))
