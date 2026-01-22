@@ -48,6 +48,20 @@ tags = [
     "001BC50C70027E5F",
     "001BC50C7002A6B1"
 ]
+tags = [
+    "001BC50C70027E17",
+    "001BC50C70027E25",
+    "001BC50C70027E58",
+    "001BC50C70027EA2",
+    "001BC50C70027DF8",
+    "001BC50C70027E16",
+    "001BC50C70027E5E",
+    "001BC50C70027E66",
+    "001BC50C70027E73",
+    "001BC50C70027E77",
+    "001BC50C70027E7F",
+    "001BC50C70027E8C",
+]
 
 # ---------------------------
 # Initialize data structures
@@ -169,7 +183,7 @@ def process_metadata(list_meta_data, tags, UID, data, positions,incertitude):
 
         # Append position
         positions[tag].append([float(line["latitude"]), float(line["longitude"])])
-        save_positions_cartesian(positions[tag][(-70):], 2,out_cm=f"test_site/trajectories/{tag}positions_cartesian_cm{movement}.npy")
+        save_positions_cartesian(positions[tag][(-50):], 2,out_cm=f"test_site/trajectories/Locengine_{movement}_{tag}.npy")
         # Append row
         data[tag].append(row)
         print (f"Carried data for {tag} is :{len(data[tag])}")
@@ -468,13 +482,13 @@ def run_predictor(tag,rows,trajectories,initialisation_traj=initialisation_traj,
     print("Running run_predictor")
     
     df = pd.DataFrame(rows)
-    transform(df,freq=1)
+    transform(df,freq=2)
     filtered_trajectory,trajectories[tag]= prediction(df,trajectories[tag],initialisation_traj[tag],incertitude[tag])
     initialisation_traj[tag]= False
     
-    np.save(f"test_site/trajectories/{movement}_{tag}.npy", filtered_trajectory[:,(-70):])
-    print(f"saved positions -> test_site/trajectories/{movement}_{tag}.npy (cm)")
-    df.to_csv(f"test_site/{movement}_{tag}_distance.csv",index=False)
+    np.save(f"test_site/trajectories/New_algo_{movement}_{tag}.npy", filtered_trajectory[:,(-50):])
+    print(f"saved positions -> test_site/trajectories/New_algo_{movement}_{tag}.npy (cm)")
+    df.to_csv(f"test_site/New_algo_{movement}_{tag}_distance.csv",index=False)
  
   
     

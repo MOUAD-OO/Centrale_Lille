@@ -43,16 +43,17 @@ echo "Collecting '$name' test vectors"
 
 # Start mosquitto_sub in the background
 (
-    mosquitto_sub  \
-    -h roger.wizzilab.com \
-    -u 634b8f91f3ff \
-    -P 9422773ebafbef2d074cd2be912d063d \
-    -p 8883 \
-    -t /applink/27C6B975/location/1506/# \
-    -i 634b8f91f3ff:0 \
-    -d -v \
-    --capath /etc/ssl/certs \
-    > logs/test.log
+    mosquitto_sub \
+  -h roger.wizzilab.com \
+  -p 8883 \
+  -u 2e13dd1e6216 \
+  -P e12a34e727286eae0ab251852bef1ae0 \
+  -t /applink/2BF12485/location/# \
+  -i 2e13dd1e6216:0 \
+  -d -v \
+  --capath /etc/ssl/certs \
+  > logs/test.log
+
 ) &
 MOSQUITTO_PID=$!
 

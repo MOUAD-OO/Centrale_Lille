@@ -10,7 +10,7 @@ anchors = np.load("generating_bloc/anchor_positions.npy")
 fig, ax = plt.subplots(figsize=(16,12))
 x=[-1140,1238]
 y=[290.2,-279.74]
-ax.plot(x,y, linestyle='--', color='gray', label='Chemin idéal')
+#ax.plot(x,y, linestyle='--', color='gray', label='Chemin idéal')
 ax.scatter(anchors[:,0],anchors[:,1],marker='s',label= "Anchors",c='black')
 trajectories = []
 lines = []
@@ -93,7 +93,7 @@ def update(frame):
 
 
 # Run the animation indefinitely; update() will pick up new files as they appear.
-ani = FuncAnimation(fig, update, frames=itertools.count(), interval=300, blit=False)
+ani = FuncAnimation(fig, update, frames=itertools.count(), interval=1, blit=False)
 
 plt.axis('equal')
 plt.legend()

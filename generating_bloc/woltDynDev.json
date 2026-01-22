@@ -1,65 +1,37 @@
 {
   "devices": [
     {
-      "uid": "001BC50C70027DC4",
-      "latitude": 48.8172973,
-      "longitude": 2.3264559,
-      "altitude": 1.40,
+      "uid": "001BC50C70027CF9",
+      "latitude": 50.6099045,
+      "longitude": 3.1495216,
+      "altitude": 0.00,
       "pin_mode": "Yes"
     },
     {
-      "uid": "001BC50C70027DD9",
-      "latitude": 48.8172786,
-      "longitude": 2.3265833,
-      "altitude": 1.65,
+      "uid": "001BC50C70027D01",
+      "latitude": 50.6099858,
+      "longitude": 3.1495605,
+      "altitude": 0.00,
       "pin_mode": "Yes"
     },
     {
-      "uid": "001BC50C70027DDA",
-      "latitude": 48.8172752,
-      "longitude": 2.3263845,
-      "altitude": 0.48,
+      "uid": "001BC50C70027DAC",
+      "latitude": 50.6099645,
+      "longitude": 3.1496610,
+      "altitude": 0.00,
       "pin_mode": "Yes"
     },
     {
-      "uid": "001BC50C70027DF5",
-      "latitude": 48.8172194,
-      "longitude": 2.3264800,
-      "altitude": 0.81,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027E14",
-      "latitude": 48.8172596,
-      "longitude": 2.3265226,
-      "altitude": 0.64,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027E75",
-      "latitude": 48.8172359,
-      "longitude": 2.3263362,
-      "altitude": 0.81,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027E81",
-      "latitude": 48.8172450,
-      "longitude": 2.3264036,
-      "altitude": 0.80,
-      "pin_mode": "Yes"
-    },
-    {
-      "uid": "001BC50C70027E9B",
-      "latitude": 48.8172439,
-      "longitude": 2.3265632,
-      "altitude": 0.08,
+      "uid": "001BC50C70027DE2",
+      "latitude": 50.6098777,
+      "longitude": 3.1496309,
+      "altitude": 0.00,
       "pin_mode": "Yes"
     }
   ],
   "transform": {
-    "latitude": 48.8172611,
-    "longitude": 2.3264655,
+    "latitude": 50.6099331,
+    "longitude": 3.1495935,
     "longitude_factor": 1
   }
 }
