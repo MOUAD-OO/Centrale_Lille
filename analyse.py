@@ -41,9 +41,9 @@ class PathAnalyzer:
             (self.real_path[:min_len, 1] - est_path[:min_len, 1])**2
         )
         return distances
-    """
-    def compute_distances(self, est_path,a=-0.24,b=18):
-        
+    
+    def compute_distances(self, est_path,a=-0.2205,b=7):
+        """
         Compute perpendicular distances from trajectory points to a line y = a*x + b.
 
         Parameters
@@ -59,14 +59,14 @@ class PathAnalyzer:
         -------
         distances : np.ndarray, shape (N,)
             Perpendicular distances to the line
-        
+        """
         min_len = min(len(self.real_path), len(est_path))
         x = est_path[:min_len, 0]
         y = est_path[:min_len, 1]
 
         distances = np.abs(a * x - y + b) / np.sqrt(a**2 + 1)
         return distances
-    """
+
 
     def compute_rmse(self, distances):
         """Compute cumulative RMSE over time."""
@@ -125,7 +125,7 @@ class PathAnalyzer:
         # Speed plot
         plt.subplot(2, 1, 1)
         speed_real, acc_real = self.compute_speed_acceleration(self.real_path, frequency)
-        plt.plot(time_real, speed_real, label="Real Speed", color="green")
+        plt.plot(time_real, speed_real[:len(time_real)], label="Real Speed", color="green")
         if self.est_path_1 is not None:
             speed_1, _ = self.compute_speed_acceleration(self.est_path_1, frequency)
             plt.plot(self.est_path_1[:, 2], speed_1, label="Est. 1 Speed", color="blue")
@@ -139,7 +139,7 @@ class PathAnalyzer:
         plt.grid(True)
         # Acceleration plot
         plt.subplot(2, 1, 2)
-        plt.plot(time_real, acc_real, label="Real Acceleration", color="green")
+        plt.plot(time_real, acc_real[:len(time_real)], label="Real Acceleration", color="green")
         if self.est_path_1 is not None:
             _, acc_1 = self.compute_speed_acceleration(self.est_path_1, frequency)
             plt.plot(self.est_path_1[:, 2], acc_1, label="Est. 1 Acceleration", color="blue")
@@ -172,8 +172,8 @@ class PathAnalyzer:
         plt.figure(figsize=(10, 8))
         anchor_positions = np.load("generating_bloc/anchor_positions.npy")
         plt.scatter(anchor_positions[:, 0], anchor_positions[:, 1], c='red', label='Anchors')
-        plt.plot(self.real_path[:, 0], self.real_path[:, 1], marker='o', markersize=4,
-                 linestyle='-', alpha=0.7, color="green", label="Real Path")
+        plt.plot(self.real_path[:, 0], self.real_path[:, 1], marker='o', markersize=1,
+                 linestyle='-', alpha=0.4, color="green", label="Real Path")
         if self.est_path_1 is not None:
             plt.plot(self.est_path_1[:, 0], self.est_path_1[:, 1], marker='s', markersize=4,
                      linestyle='-', alpha=0.5, color="blue", label="Estimation 1")
